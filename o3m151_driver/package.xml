@@ -1,0 +1,40 @@
+<package>
+
+  <name>o3m151_driver</name>
+  <version>1.2.0</version>
+  <description>
+    ROS device driver for Ifm O3M151 TOF camera.
+  </description>
+  <maintainer email="vincentrou@gmail.com">Vincent Rousseau</maintainer>
+  <author> Vincent Rousseau</author>
+  <license>BSD</license>
+
+  <url type="website">http://www.ros.org/wiki/</url>
+  <url type="repository">https://github.com/</url>
+  <url type="bugtracker">https://github.com/issues</url>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>diagnostic_updater</build_depend>
+  <build_depend>libpcap</build_depend>
+  <build_depend>nodelet</build_depend>
+  <build_depend>pluginlib</build_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>tf</build_depend>
+
+  <!-- these build dependencies are only needed for unit testing -->
+  <build_depend>roslaunch</build_depend>
+  <build_depend>rostest</build_depend>
+
+  <run_depend>diagnostic_updater</run_depend>
+  <run_depend>libpcap</run_depend>
+  <run_depend>nodelet</run_depend>
+  <run_depend>pluginlib</run_depend>
+  <run_depend>roscpp</run_depend>
+  <run_depend>tf</run_depend>
+
+  <export>
+    <nodelet plugin="${prefix}/nodelet_o3m151.xml"/>
+  </export>
+
+</package>
