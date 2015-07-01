@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="tf" type="static_transform_publisher" name="o3m151_broadcaster" args="1 0 0 0 0 0 1 map o3m151 100" />
+
+    <node pkg="o3m151_driver" type="o3m151_node" name="o3m151_node"/>
+</launch>

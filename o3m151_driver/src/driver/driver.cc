@@ -69,15 +69,15 @@ O3M151Driver::O3M151Driver(ros::NodeHandle node,
   // raw data output topic
   output_ = node.advertise<sensor_msgs::PointCloud2>("o3m151_points", 10);
 
-  pcl::visualization::PCLVisualizer * pcl_viewer = new pcl::visualization::PCLVisualizer ("3D Viewer");
-  viewer_.reset(pcl_viewer);
-  viewer_->setBackgroundColor (0, 0, 0);
+//  pcl::visualization::PCLVisualizer * pcl_viewer = new pcl::visualization::PCLVisualizer ("3D Viewer");
+//  viewer_.reset(pcl_viewer);
+//  viewer_->setBackgroundColor (0, 0, 0);
   pcl::PointCloud<pcl::PointXYZ>* pc_cart_packet = new pcl::PointCloud<pcl::PointXYZ>;
   cart_packet_.reset(pc_cart_packet);
-  viewer_->addPointCloud<pcl::PointXYZ> (cart_packet_, "cartesian cloud");
-  viewer_->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "cartesian cloud");
-  viewer_->addCoordinateSystem (1.0);
-  viewer_->initCameraParameters ();
+//  viewer_->addPointCloud<pcl::PointXYZ> (cart_packet_, "cartesian cloud");
+//  viewer_->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "cartesian cloud");
+//  viewer_->addCoordinateSystem (1.0);
+//  viewer_->initCameraParameters ();
 }
 
 /** poll the device
@@ -109,6 +109,7 @@ bool O3M151Driver::poll(void)
   cart_packet_->header.stamp = now.toNSec() / 1e3;
   cart_packet_->header.frame_id = config_.frame_id;
   cart_packet_->height = 1;
+  cart_packet_->width = cart_packet_->points.size();
 //  viewer_->updatePointCloud(cart_packet_, "cartesian cloud");
 //  viewer_->spinOnce();
   output_.publish(cart_packet_);
