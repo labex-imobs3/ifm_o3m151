@@ -36,7 +36,7 @@
 #include <pcap.h>
 
 #include <ros/ros.h>
-#include <o3m151_msgs/O3M151Packet.h>
+#include <pcl_conversions/pcl_conversions.h>
 
 namespace o3m151_driver
 {
@@ -56,7 +56,7 @@ namespace o3m151_driver
      *          -1 if end of file
      *          > 0 if incomplete packet (is this possible?)
      */
-    virtual int getPacket(o3m151_msgs::O3M151Packet *pkt) = 0;
+    virtual int getPacket(pcl::PointCloud<pcl::PointXYZ> &pc) = 0;
   };
 
   /** @brief Live O3M151 input from socket. */
@@ -66,10 +66,18 @@ namespace o3m151_driver
     InputSocket(ros::NodeHandle private_nh,
                 uint16_t udp_port = UDP_PORT_NUMBER);
     ~InputSocket();
-
-    virtual int getPacket(o3m151_msgs::O3M151Packet *pkt);
+    int receiver();
+    virtual int getPacket(pcl::PointCloud<pcl::PointXYZ> &pc);
 
   private:
+
+    int processPacket( int8_t* currentPacketData,  // payload of the udp packet (without ethernet/IP/UDP header)
+                        uint32_t currentPacketSize, // size of the udp packet payload
+                        int8_t* channelBuffer,      // buffer for a complete channel
+                        uint32_t channelBufferSize, // size of the buffer for the complete channel
+                        uint32_t* pos);              // the current pos in the channel buffer
+
+    void processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZ> &pc);
 
     int sockfd_;
   };
@@ -91,7 +99,7 @@ namespace o3m151_driver
               double repeat_delay=0.0);
     ~InputPCAP();
 
-    virtual int getPacket(o3m151_msgs::O3M151Packet *pkt);
+    virtual int getPacket(pcl::PointCloud<pcl::PointXYZ> &pc);
 
   private:
 

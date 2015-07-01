@@ -30,9 +30,42 @@
 #include <sys/file.h>
 #include <o3m151_driver/input.h>
 
+#define RESULT_OK (0)
+#define RESULT_ERROR (-1)
+
 namespace o3m151_driver
 {
-  static const size_t packet_size = sizeof(o3m151_msgs::O3M151Packet().data);
+  static const size_t packet_size = 1024; //sizeof(o3m151_msgs::O3M151Packet().data);
+
+  typedef struct PacketHeader
+  {
+      uint16_t Version;
+      uint16_t Device;
+      uint32_t PacketCounter;
+      uint32_t CycleCounter;
+      uint16_t NumberOfPacketsInCycle;
+      uint16_t IndexOfPacketInCycle;
+      uint16_t NumberOfPacketsInChannel;
+      uint16_t IndexOfPacketInChannel;
+      uint32_t ChannelID;
+      uint32_t TotalLengthOfChannel;
+      uint32_t LengthPayload;
+
+  } PacketHeader;
+
+
+  typedef struct ChannelHeader
+  {
+      uint32_t StartDelimiter;
+      uint8_t reserved[24];
+
+  } ChannelHeader;
+
+  typedef struct ChannelEnd
+  {
+      uint32_t EndDelimiter;
+
+  } ChannelEnd;
 
   ////////////////////////////////////////////////////////////////////////
   // InputSocket class implementation
@@ -84,8 +117,258 @@ namespace o3m151_driver
     (void) close(sockfd_);
   }
 
+  // Extracts the data in the payload of the udp packet und puts it into the channel buffer
+  int InputSocket::processPacket( int8_t* currentPacketData,  // payload of the udp packet (without ethernet/IP/UDP header)
+                      uint32_t currentPacketSize, // size of the udp packet payload
+                      int8_t* channelBuffer,      // buffer for a complete channel
+                      uint32_t channelBufferSize, // size of the buffer for the complete channel
+                      uint32_t* pos)              // the current pos in the channel buffer
+  {
+
+      // There is always a PacketHeader structure at the beginning
+    PacketHeader* ph = (PacketHeader*)currentPacketData;
+    int Start = sizeof(PacketHeader);
+    int Length = currentPacketSize - sizeof(PacketHeader);
+
+      // Only the first packet of a channel contains a ChannelHeader
+      if (ph->IndexOfPacketInChannel == 0)
+    {
+      Start += sizeof(ChannelHeader);
+    }
+
+      // Only the last packet of a channel contains an EndDelimiter (at the end, after the data)
+    if (ph->IndexOfPacketInChannel == ph->NumberOfPacketsInChannel - 1)
+    {
+      Length -= sizeof(ChannelEnd);
+    }
+
+      // Is the buffer big enough?
+      if ((*pos) + Length > channelBufferSize)
+      {
+          // Too small means either an error in the program logic or a corrupt packet
+          ROS_DEBUG("Channel buffer is too small.\n");
+          return RESULT_ERROR;
+      }
+      else
+      {
+        memcpy(channelBuffer+(*pos), currentPacketData+Start, Length);
+      }
+
+    (*pos) += Length;
+
+      return RESULT_OK;
+
+  }
+
+
+  // Gets the data from the channel and prints them
+  void InputSocket::processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZ> & pc)
+  {
+    // you may find the offset of the data in the documentation
+    const uint32_t distanceX_offset = 2052;
+    const uint32_t distanceY_offset = 6148;
+    const uint32_t distanceZ_offset = 10244;
+    const uint32_t confidence_offset = 14340;
+    const uint32_t amplitude_offset = 16388;
+
+    // As we are working on raw buffers we have to check if the buffer is as big as we think
+    if (size < 18488)
+    {
+      ROS_DEBUG("processChannel8: buf too small\n");
+      return;
+    }
+
+
+    // These are arrays with 16*64=1024 elements
+    float* distanceX = (float*)(&buf[distanceX_offset]);
+    float* distanceY = (float*)(&buf[distanceY_offset]);
+    float* distanceZ = (float*)(&buf[distanceZ_offset]);
+    uint16_t* confidence = (uint16_t*)(&buf[confidence_offset]);
+    uint16_t* amplitude = (uint16_t*)(&buf[amplitude_offset]);
+
+
+    // line 8 column 32 is in the middle of the sensor
+    //uint32_t i = 64*7 + 32;
+
+    for( uint32_t i =0; i<1024; ++i)
+    {
+      // The lowest bit of the confidence contains the information if the pixel is valid
+      uint32_t pixelValid = confidence[i] & 1;
+
+      // 0=valid, 1=invalid
+      if (pixelValid == 0)
+      {
+          // \r is carriage return without newline. This way the output is always written in the same line
+//        ROS_DEBUG("X: %5.2f Y: %5.2f Z:%5.2f Amplitude:%5d                                               \r",
+//            distanceX[i],
+//            distanceY[i],
+//            distanceZ[i],
+//            amplitude[i]);
+        pcl::PointXYZ point;
+        point.x = distanceX[i];
+        point.y = distanceY[i];
+        point.z = distanceZ[i];
+        //point.intensity = amplitude[i];
+        pc.points.push_back(point);
+      }
+      else
+      {
+        ROS_DEBUG("Pixel is invalid");
+      }
+    }
+  }
+
+  int InputSocket::getPacket(pcl::PointCloud<pcl::PointXYZ> &pc)
+  {
+    // The data is in the channel 8
+    const uint32_t customerDataChannel = 8;
+
+    // holds the sender information of the received packet
+    sockaddr remoteAddr;
+    int32_t remoteAddrLen;
+    remoteAddrLen=sizeof(sockaddr);
+
+    // buffer for a single UDP packet
+    const uint32_t udpPacketBufLen = 2000;
+    int8_t udpPacketBuf[udpPacketBufLen];
+
+    // As the alignment was forced to 1 we can work with the struct on the buffer.
+    // This assumes the byte order is little endian which it is on a PC.
+    PacketHeader* ph = (PacketHeader*)udpPacketBuf;
+
+    // the size of the channel may change so the size will be taken from the packet
+    uint32_t channel_buf_size = 0;
+    int8_t* channelBuf = NULL;
+
+    // As there is no offset in the packet header we have to remember where the next part should go
+    uint32_t pos_in_channel = 0;
+
+    // remember the counter of the previous packet so we know when we loose packets
+    uint32_t previous_packet_counter = 0;
+    bool previous_packet_counter_valid = false;
+
+
+    // the receiption of the data may start at any time. So we wait til we find the beginning of our channel
+    bool startOfChannelFound = false;
+
+    struct pollfd fds[1];
+    fds[0].fd = sockfd_;
+    fds[0].events = POLLIN;
+    static const int POLL_TIMEOUT = 1000; // one second (in msec)
+
+    // run for all eternity as long as no error occurs
+    while (true)
+    {
+      // Unfortunately, the Linux kernel recvfrom() implementation
+      // uses a non-interruptible sleep() when waiting for data,
+      // which would cause this method to hang if the device is not
+      // providing data.  We poll() the device first to make sure
+      // the recvfrom() will not block.
+      //
+      // Note, however, that there is a known Linux kernel bug:
+      //
+      //   Under Linux, select() may report a socket file descriptor
+      //   as "ready for reading", while nevertheless a subsequent
+      //   read blocks.  This could for example happen when data has
+      //   arrived but upon examination has wrong checksum and is
+      //   discarded.  There may be other circumstances in which a
+      //   file descriptor is spuriously reported as ready.  Thus it
+      //   may be safer to use O_NONBLOCK on sockets that should not
+      //   block.
+
+      // poll() until input available
+      do
+      {
+        int retval = poll(fds, 1, POLL_TIMEOUT);
+        if (retval < 0)             // poll() error?
+          {
+            if (errno != EINTR)
+              ROS_ERROR("poll() error: %s", strerror(errno));
+            return 1;
+          }
+        if (retval == 0)            // poll() timeout?
+          {
+            ROS_WARN("O3M151 poll() timeout");
+            return 1;
+          }
+        if ((fds[0].revents & POLLERR)
+            || (fds[0].revents & POLLHUP)
+            || (fds[0].revents & POLLNVAL)) // device error?
+          {
+            ROS_ERROR("poll() reports O3M151 error");
+            return 1;
+          }
+      } while ((fds[0].revents & POLLIN) == 0);
+      // receive the data. rc contains the number of received bytes and also the error code
+      // IMPORTANT: This is a blocking call. If it doesn't receive anything it will wait forever
+      ssize_t rc=recvfrom(sockfd_,(char*)udpPacketBuf,udpPacketBufLen,0,NULL,NULL);
+      if(rc < 0)
+      {
+          return RESULT_ERROR;
+      }
+      else
+      {
+
+          // Check the packet counter for missing packets
+          if (previous_packet_counter_valid)
+          {
+              // if the type of the variables is ui32, it will also work when the wrap around happens.
+              if ((ph->PacketCounter - previous_packet_counter) != 1)
+              {
+                  ROS_DEBUG("Packet Counter jumped from %ul to %ul", previous_packet_counter, ph->PacketCounter);
+
+                  // With this it will ignore the already received parts and resynchronize at
+                  // the beginning of the next cycle.
+                  startOfChannelFound = false;
+              }
+          }
+
+          previous_packet_counter = ph->PacketCounter;
+          previous_packet_counter_valid = true;
+
+          // is this the channel with our data?
+          if (ph->ChannelID == customerDataChannel)
+          {
+
+              // are we at the beginning of the channel?
+              if (ph->IndexOfPacketInChannel == 0)
+              {
+                  startOfChannelFound = true;
+
+                  // If we haven't allocated memory for channel do it now.
+                  if (channel_buf_size == 0)
+                  {
+                      channel_buf_size = ph->TotalLengthOfChannel;
+                      channelBuf = new int8_t[channel_buf_size];
+                  }
+
+                  // as we reuse the buffer we clear it at the beginning of a transmission
+                  memset(channelBuf, 0, channel_buf_size);
+                  pos_in_channel = 0;
+
+              }
+
+              // if we have found the start of the channel at least once, we are ready to process the packet
+              if (startOfChannelFound)
+              {
+
+                  processPacket(udpPacketBuf, rc, channelBuf, channel_buf_size, &pos_in_channel);
+
+                  // Have we found the last packet in this channel? Then we are able to process it
+                  // The index is zero based so a channel with n parts will have indices from 0 to n-1
+                  if (ph->IndexOfPacketInChannel == ph->NumberOfPacketsInChannel -1)
+                  {
+                      processChannel8(channelBuf, pos_in_channel, pc);
+                      return RESULT_OK;
+                  }
+              }
+          }
+      }
+    }
+  }
+
   /** @brief Get one o3m151 packet. */
-  int InputSocket::getPacket(o3m151_msgs::O3M151Packet *pkt)
+  int InputSocket::receiver()
   {
     double time1 = ros::Time::now().toSec();
 
@@ -139,8 +422,8 @@ namespace o3m151_driver
 
         // Receive packets that should now be available from the
         // socket using a blocking read.
-        ssize_t nbytes = recvfrom(sockfd_, &pkt->data[0],
-                                  packet_size,  0, NULL, NULL);
+        ssize_t nbytes = 0;
+      //recvfrom(sockfd_, &pkt->data[0], packet_size,  0, NULL, NULL);
 
 	if (nbytes < 0)
 	  {
@@ -164,7 +447,7 @@ namespace o3m151_driver
     // Average the times at which we begin and end reading.  Use that to
     // estimate when the scan occurred.
     double time2 = ros::Time::now().toSec();
-    pkt->stamp = ros::Time((time2 + time1) / 2.0);
+    //pkt->stamp = ros::Time((time2 + time1) / 2.0);
 
     return 0;
   }
@@ -227,7 +510,7 @@ namespace o3m151_driver
 
 
   /** @brief Get one o3m151 packet. */
-  int InputPCAP::getPacket(o3m151_msgs::O3M151Packet *pkt)
+  int InputPCAP::getPacket(pcl::PointCloud<pcl::PointXYZ> &pc)
   {
     struct pcap_pkthdr *header;
     const u_char *pkt_data;
@@ -241,8 +524,8 @@ namespace o3m151_driver
             if (read_fast_ == false)
               packet_rate_.sleep();
             
-            memcpy(&pkt->data[0], pkt_data+42, packet_size);
-            pkt->stamp = ros::Time::now();
+//            memcpy(&pkt->data[0], pkt_data+42, packet_size);
+//            pkt->stamp = ros::Time::now();
             empty_ = false;
             return 0;                   // success
           }

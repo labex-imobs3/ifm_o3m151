@@ -17,8 +17,10 @@
 
 #include <string>
 #include <ros/ros.h>
+#include <pcl_ros/point_cloud.h>
 #include <diagnostic_updater/diagnostic_updater.h>
 #include <diagnostic_updater/publisher.h>
+#include <pcl/visualization/cloud_viewer.h>
 
 #include <o3m151_driver/input.h>
 
@@ -43,7 +45,6 @@ private:
     std::string frame_id;            ///< tf frame ID
     std::string model;               ///< device model name
     int    npackets;                 ///< number of packets to collect
-    double rpm;                      ///< device rotation rate (RPMs)
   } config_;
 
   boost::shared_ptr<Input> input_;
@@ -54,6 +55,8 @@ private:
   double diag_min_freq_;
   double diag_max_freq_;
   boost::shared_ptr<diagnostic_updater::TopicDiagnostic> diag_topic_;
+  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer_;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cart_packet_;
 };
 
 } // namespace o3m151_driver

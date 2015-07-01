@@ -5,9 +5,12 @@ set(${PROJECT_NAME}_CATKIN_DEPS
     diagnostic_updater
     nodelet
     roscpp
+    roslib
+    pcl_ros
+    sensor_msgs
     tf)
 
-find_package(catkin REQUIRED COMPONENTS ${${PROJECT_NAME}_CATKIN_DEPS})
+find_package(catkin REQUIRED COMPONENTS ${${PROJECT_NAME}_CATKIN_DEPS} pcl_conversions)
 
 # This driver uses Boost threads
 find_package(Boost REQUIRED COMPONENTS thread)
@@ -40,24 +43,6 @@ if (CATKIN_ENABLE_TESTING)
   # these dependencies are only needed for unit testing
   find_package(roslaunch REQUIRED)
   find_package(rostest REQUIRED)
-
-  # Download packet capture (PCAP) files containing test data.
-  # Store them in devel-space, so rostest can easily find them.
-  catkin_download_test_data(
-    ${PROJECT_NAME}_tests_class.pcap
-    http://download.ros.org/data/velodyne/class.pcap
-    DESTINATION ${CATKIN_DEVEL_PREFIX}/${CATKIN_PACKAGE_SHARE_DESTINATION}/tests
-    MD5 65808d25772101358a3719b451b3d015)
-  catkin_download_test_data(
-    ${PROJECT_NAME}_tests_32e.pcap
-    http://download.ros.org/data/velodyne/32e.pcap
-    DESTINATION ${CATKIN_DEVEL_PREFIX}/${CATKIN_PACKAGE_SHARE_DESTINATION}/tests
-    MD5 e41d02aac34f0967c03a5597e1d554a9)
-  catkin_download_test_data(
-    ${PROJECT_NAME}_tests_vlp16.pcap
-    http://download.ros.org/data/velodyne/vlp16.pcap
-    DESTINATION ${CATKIN_DEVEL_PREFIX}/${CATKIN_PACKAGE_SHARE_DESTINATION}/tests
-    MD5 f45c2bb1d7ee358274e423ea3b66fd73)
   
   # unit tests
   add_rostest(tests/pcap_node_hertz.test)

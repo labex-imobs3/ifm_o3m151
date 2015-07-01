@@ -17,7 +17,7 @@
 
 #include <ros/ros.h>
 #include <tf/transform_listener.h>
-#include <o3m151_msgs/O3M151Scan.h>
+#include <sensor_msgs/PointCloud2.h>
 
 #include "driver.h"
 
@@ -34,53 +34,15 @@ O3M151Driver::O3M151Driver(ros::NodeHandle node,
   config_.frame_id = tf::resolve(tf_prefix, config_.frame_id);
 
   // get model name, validate string, determine packet rate
-  private_nh.param("model", config_.model, std::string("64E"));
-  double packet_rate;                   // packet frequency (Hz)
-  std::string model_full_name;
-  if ((config_.model == "64E_S2") || 
-      (config_.model == "64E_S2.1"))    // generates 1333312 points per second
-    {                                   // 1 packet holds 384 points
-      packet_rate = 3472.17;            // 1333312 / 384
-      model_full_name = std::string("HDL-") + config_.model;
-    }
-  else if (config_.model == "64E")
-    {
-      packet_rate = 2600.0;
-      model_full_name = std::string("HDL-") + config_.model;
-    }
-  else if (config_.model == "32E")
-    {
-      packet_rate = 1808.0;
-      model_full_name = std::string("HDL-") + config_.model;
-    }
-  else if (config_.model == "VLP16")
-    {
-      packet_rate = 781.25;             // 300000 / 384
-      model_full_name = "VLP-16";
-    }
-  else
-    {
-      ROS_ERROR_STREAM("unknown O3M151 LIDAR model: " << config_.model);
-      packet_rate = 2600.0;
-    }
-  std::string deviceName(std::string("O3M151 ") + model_full_name);
-
-  private_nh.param("rpm", config_.rpm, 600.0);
-  ROS_INFO_STREAM(deviceName << " rotating at " << config_.rpm << " RPM");
-  double frequency = (config_.rpm / 60.0);     // expected Hz rate
-
-  // default number of packets for each scan is a single revolution
-  // (fractions rounded up)
-  config_.npackets = (int) ceil(packet_rate / frequency);
-  private_nh.getParam("npackets", config_.npackets);
-  ROS_INFO_STREAM("publishing " << config_.npackets << " packets per scan");
+  private_nh.param("model", config_.model, std::string("o3m151"));
+  std::string deviceName(std::string("O3M151"));
 
   std::string dump_file;
   private_nh.param("pcap", dump_file, std::string(""));
 
   // initialize diagnostics
   diagnostics_.setHardwareID(deviceName);
-  const double diag_freq = packet_rate/config_.npackets;
+  const double diag_freq = 10;
   diag_max_freq_ = diag_freq;
   diag_min_freq_ = diag_freq;
   ROS_INFO("expected frequency: %.3f (Hz)", diag_freq);
@@ -96,7 +58,7 @@ O3M151Driver::O3M151Driver(ros::NodeHandle node,
   if (dump_file != "")
     {
       input_.reset(new o3m151_driver::InputPCAP(private_nh,
-                                                  packet_rate,
+                                                  diag_freq,
                                                   dump_file));
     }
   else
@@ -105,7 +67,17 @@ O3M151Driver::O3M151Driver(ros::NodeHandle node,
     }
 
   // raw data output topic
-  output_ = node.advertise<o3m151_msgs::O3M151Scan>("o3m151_packets", 10);
+  output_ = node.advertise<sensor_msgs::PointCloud2>("o3m151_points", 10);
+
+  pcl::visualization::PCLVisualizer * pcl_viewer = new pcl::visualization::PCLVisualizer ("3D Viewer");
+  viewer_.reset(pcl_viewer);
+  viewer_->setBackgroundColor (0, 0, 0);
+  pcl::PointCloud<pcl::PointXYZ>* pc_cart_packet = new pcl::PointCloud<pcl::PointXYZ>;
+  cart_packet_.reset(pc_cart_packet);
+  viewer_->addPointCloud<pcl::PointXYZ> (cart_packet_, "cartesian cloud");
+  viewer_->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "cartesian cloud");
+  viewer_->addCoordinateSystem (1.0);
+  viewer_->initCameraParameters ();
 }
 
 /** poll the device
@@ -115,31 +87,35 @@ O3M151Driver::O3M151Driver(ros::NodeHandle node,
 bool O3M151Driver::poll(void)
 {
   // Allocate a new shared pointer for zero-copy sharing with other nodelets.
-  o3m151_msgs::O3M151ScanPtr scan(new o3m151_msgs::O3M151Scan);
-  scan->packets.resize(config_.npackets);
+  //sensor_msgs::PointCloud2Ptr pc(new sensor_msgs::PointCloud2);
+  //pcl::PointCloud<pcl::PointXYZ>::Ptr pc(new pcl::PointCloud<pcl::PointXYZ>());
 
   // Since the o3m151 delivers data at a very high rate, keep
   // reading and publishing scans as fast as possible.
-  for (int i = 0; i < config_.npackets; ++i)
+  cart_packet_->points.clear();
+  while (true)
     {
-      while (true)
-        {
-          // keep reading until full packet received
-          int rc = input_->getPacket(&scan->packets[i]);
-          if (rc == 0) break;       // got a full packet?
-          if (rc < 0) return false; // end of file reached?
-        }
+      // keep reading until full packet received
+      int rc = input_->getPacket(*cart_packet_);
+      if (rc == 0) break;       // got a full packet?
+      if (rc < 0) return false; // end of file reached?
     }
 
   // publish message using time of last packet read
-  ROS_DEBUG("Publishing a full O3M151 scan.");
-  scan->header.stamp = ros::Time(scan->packets[config_.npackets - 1].stamp);
-  scan->header.frame_id = config_.frame_id;
-  output_.publish(scan);
+  ROS_DEBUG("Publishing a full O3M151 scan. %d", cart_packet_->points.size());
+  //ROS_DEBUG_STREAM(cart_packet_->points.at(0));
+  ros::Time now = ros::Time::now();
+  //pcl_conversions::toPCL()
+  cart_packet_->header.stamp = now.toNSec() / 1e3;
+  cart_packet_->header.frame_id = config_.frame_id;
+  cart_packet_->height = 1;
+//  viewer_->updatePointCloud(cart_packet_, "cartesian cloud");
+//  viewer_->spinOnce();
+  output_.publish(cart_packet_);
 
   // notify diagnostics that a message has been published, updating
   // its status
-  diag_topic_->tick(scan->header.stamp);
+  diag_topic_->tick(now);
   diagnostics_.update();
 
   return true;

@@ -8,7 +8,7 @@
 
 /** \file
  *
- *  ROS driver nodelet for the Velodyne 3D LIDARs
+ *  ROS driver nodelet for the O3M151 3D LIDARs
  */
 
 #include <string>
@@ -50,13 +50,13 @@ private:
   volatile bool running_;               ///< device thread is running
   boost::shared_ptr<boost::thread> deviceThread_;
 
-  boost::shared_ptr<VelodyneDriver> dvr_; ///< driver implementation class
+  boost::shared_ptr<O3M151Driver> dvr_; ///< driver implementation class
 };
 
 void DriverNodelet::onInit()
 {
   // start the driver
-  dvr_.reset(new VelodyneDriver(getNodeHandle(), getPrivateNodeHandle()));
+  dvr_.reset(new O3M151Driver(getNodeHandle(), getPrivateNodeHandle()));
 
   // spawn device poll thread
   running_ = true;

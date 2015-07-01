@@ -3,11 +3,18 @@
 file(GLOB_RECURSE include_files "${CMAKE_SOURCE_DIR}/include/${PROJECT_NAME}/*")
 #message(STATUS "include_files " ${include_files})
 
+find_package(PCL 1.2 REQUIRED)
+
+include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
+
 add_executable(o3m151_node o3m151_node.cc driver.cc ${include_files})
 target_link_libraries(o3m151_node
   o3m151_input
   ${catkin_LIBRARIES}
   ${libpcap_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
 
 # build the nodelet version
@@ -16,6 +23,7 @@ target_link_libraries(driver_nodelet
   o3m151_input
   ${catkin_LIBRARIES}
   ${libpcap_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
 
 # install runtime files
