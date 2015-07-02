@@ -66,7 +66,6 @@ namespace o3m151_driver
     InputSocket(ros::NodeHandle private_nh,
                 uint16_t udp_port = UDP_PORT_NUMBER);
     ~InputSocket();
-    int receiver();
     virtual int getPacket(pcl::PointCloud<pcl::PointXYZI> &pc);
 
   private:
