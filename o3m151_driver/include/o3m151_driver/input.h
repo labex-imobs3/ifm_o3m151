@@ -56,7 +56,7 @@ namespace o3m151_driver
      *          -1 if end of file
      *          > 0 if incomplete packet (is this possible?)
      */
-    virtual int getPacket(pcl::PointCloud<pcl::PointXYZ> &pc) = 0;
+    virtual int getPacket(pcl::PointCloud<pcl::PointXYZI> &pc) = 0;
   };
 
   /** @brief Live O3M151 input from socket. */
@@ -67,7 +67,7 @@ namespace o3m151_driver
                 uint16_t udp_port = UDP_PORT_NUMBER);
     ~InputSocket();
     int receiver();
-    virtual int getPacket(pcl::PointCloud<pcl::PointXYZ> &pc);
+    virtual int getPacket(pcl::PointCloud<pcl::PointXYZI> &pc);
 
   private:
 
@@ -77,7 +77,7 @@ namespace o3m151_driver
                         uint32_t channelBufferSize, // size of the buffer for the complete channel
                         uint32_t* pos);              // the current pos in the channel buffer
 
-    void processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZ> &pc);
+    void processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZI> &pc);
 
     int sockfd_;
   };
@@ -99,7 +99,7 @@ namespace o3m151_driver
               double repeat_delay=0.0);
     ~InputPCAP();
 
-    virtual int getPacket(pcl::PointCloud<pcl::PointXYZ> &pc);
+    virtual int getPacket(pcl::PointCloud<pcl::PointXYZI> &pc);
 
   private:
 

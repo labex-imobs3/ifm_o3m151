@@ -162,7 +162,7 @@ namespace o3m151_driver
 
 
   // Gets the data from the channel and prints them
-  void InputSocket::processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZ> & pc)
+  void InputSocket::processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZI> & pc)
   {
     // you may find the offset of the data in the documentation
     const uint32_t distanceX_offset = 2052;
@@ -204,11 +204,11 @@ namespace o3m151_driver
 //            distanceY[i],
 //            distanceZ[i],
 //            amplitude[i]);
-        pcl::PointXYZ point;
+        pcl::PointXYZI point;
         point.x = distanceX[i];
         point.y = distanceY[i];
         point.z = distanceZ[i];
-        //point.intensity = amplitude[i];
+        point.intensity = amplitude[i];
         pc.points.push_back(point);
       }
       else
@@ -218,7 +218,7 @@ namespace o3m151_driver
     }
   }
 
-  int InputSocket::getPacket(pcl::PointCloud<pcl::PointXYZ> &pc)
+  int InputSocket::getPacket(pcl::PointCloud<pcl::PointXYZI> &pc)
   {
     // The data is in the channel 8
     const uint32_t customerDataChannel = 8;
@@ -510,7 +510,7 @@ namespace o3m151_driver
 
 
   /** @brief Get one o3m151 packet. */
-  int InputPCAP::getPacket(pcl::PointCloud<pcl::PointXYZ> &pc)
+  int InputPCAP::getPacket(pcl::PointCloud<pcl::PointXYZI> &pc)
   {
     struct pcap_pkthdr *header;
     const u_char *pkt_data;

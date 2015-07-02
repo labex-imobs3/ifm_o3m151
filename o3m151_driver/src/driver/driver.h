@@ -40,12 +40,7 @@ public:
 private:
 
   // configuration parameters
-  struct
-  {
-    std::string frame_id;            ///< tf frame ID
-    std::string model;               ///< device model name
-    int    npackets;                 ///< number of packets to collect
-  } config_;
+  std::string frame_id_;            ///< tf frame ID
 
   boost::shared_ptr<Input> input_;
   ros::Publisher output_;
@@ -56,7 +51,6 @@ private:
   double diag_max_freq_;
   boost::shared_ptr<diagnostic_updater::TopicDiagnostic> diag_topic_;
   boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer_;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cart_packet_;
 };
 
 } // namespace o3m151_driver

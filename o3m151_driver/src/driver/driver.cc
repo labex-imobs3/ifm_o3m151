@@ -28,21 +28,17 @@ O3M151Driver::O3M151Driver(ros::NodeHandle node,
                                ros::NodeHandle private_nh)
 {
   // use private node handle to get parameters
-  private_nh.param("frame_id", config_.frame_id, std::string("o3m151"));
+  private_nh.param("frame_id", frame_id_, std::string("o3m151"));
   std::string tf_prefix = tf::getPrefixParam(private_nh);
   ROS_DEBUG_STREAM("tf_prefix: " << tf_prefix);
-  config_.frame_id = tf::resolve(tf_prefix, config_.frame_id);
-
-  // get model name, validate string, determine packet rate
-  private_nh.param("model", config_.model, std::string("o3m151"));
-  std::string deviceName(std::string("O3M151"));
+  frame_id_ = tf::resolve(tf_prefix, frame_id_);
 
   std::string dump_file;
   private_nh.param("pcap", dump_file, std::string(""));
 
   // initialize diagnostics
-  diagnostics_.setHardwareID(deviceName);
-  const double diag_freq = 10;
+  diagnostics_.setHardwareID(std::string("O3M151"));
+  const double diag_freq = 25;
   diag_max_freq_ = diag_freq;
   diag_min_freq_ = diag_freq;
   ROS_INFO("expected frequency: %.3f (Hz)", diag_freq);
@@ -56,28 +52,14 @@ O3M151Driver::O3M151Driver(ros::NodeHandle node,
 
   // open O3M151 input device or file
   if (dump_file != "")
-    {
-      input_.reset(new o3m151_driver::InputPCAP(private_nh,
+    input_.reset(new o3m151_driver::InputPCAP(private_nh,
                                                   diag_freq,
                                                   dump_file));
-    }
   else
-    {
-      input_.reset(new o3m151_driver::InputSocket(private_nh));
-    }
+    input_.reset(new o3m151_driver::InputSocket(private_nh));
 
   // raw data output topic
   output_ = node.advertise<sensor_msgs::PointCloud2>("o3m151_points", 10);
-
-//  pcl::visualization::PCLVisualizer * pcl_viewer = new pcl::visualization::PCLVisualizer ("3D Viewer");
-//  viewer_.reset(pcl_viewer);
-//  viewer_->setBackgroundColor (0, 0, 0);
-  pcl::PointCloud<pcl::PointXYZ>* pc_cart_packet = new pcl::PointCloud<pcl::PointXYZ>;
-  cart_packet_.reset(pc_cart_packet);
-//  viewer_->addPointCloud<pcl::PointXYZ> (cart_packet_, "cartesian cloud");
-//  viewer_->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "cartesian cloud");
-//  viewer_->addCoordinateSystem (1.0);
-//  viewer_->initCameraParameters ();
 }
 
 /** poll the device
@@ -88,31 +70,28 @@ bool O3M151Driver::poll(void)
 {
   // Allocate a new shared pointer for zero-copy sharing with other nodelets.
   //sensor_msgs::PointCloud2Ptr pc(new sensor_msgs::PointCloud2);
-  //pcl::PointCloud<pcl::PointXYZ>::Ptr pc(new pcl::PointCloud<pcl::PointXYZ>());
+  pcl::PointCloud<pcl::PointXYZI>::Ptr pc(new pcl::PointCloud<pcl::PointXYZI>());
 
   // Since the o3m151 delivers data at a very high rate, keep
   // reading and publishing scans as fast as possible.
-  cart_packet_->points.clear();
+  pc->points.clear();
   while (true)
-    {
-      // keep reading until full packet received
-      int rc = input_->getPacket(*cart_packet_);
-      if (rc == 0) break;       // got a full packet?
-      if (rc < 0) return false; // end of file reached?
-    }
+  {
+    // keep reading until full packet received
+    int rc = input_->getPacket(*pc);
+    if (rc == 0) break;       // got a full packet?
+    if (rc < 0) return false; // end of file reached?
+  }
 
   // publish message using time of last packet read
-  ROS_DEBUG("Publishing a full O3M151 scan. %d", cart_packet_->points.size());
-  //ROS_DEBUG_STREAM(cart_packet_->points.at(0));
+  ROS_DEBUG("Publishing a full O3M151 scan with %d points", pc->points.size());
   ros::Time now = ros::Time::now();
-  //pcl_conversions::toPCL()
-  cart_packet_->header.stamp = now.toNSec() / 1e3;
-  cart_packet_->header.frame_id = config_.frame_id;
-  cart_packet_->height = 1;
-  cart_packet_->width = cart_packet_->points.size();
-//  viewer_->updatePointCloud(cart_packet_, "cartesian cloud");
-//  viewer_->spinOnce();
-  output_.publish(cart_packet_);
+  /// Do not use pcl_conversions::toPCL() function for ROS hydro compatiblity !
+  pc->header.stamp = now.toNSec() / 1e3;
+  pc->header.frame_id = frame_id_;
+  pc->height = 1;
+  pc->width = pc->points.size();
+  output_.publish(pc);
 
   // notify diagnostics that a message has been published, updating
   // its status
