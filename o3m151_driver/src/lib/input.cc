@@ -36,6 +36,8 @@
 namespace o3m151_driver
 {
   static const size_t packet_size = 1024; //sizeof(o3m151_msgs::O3M151Packet().data);
+  // The data is in the channel 8
+  static const uint32_t customerDataChannel = 8;
 
   typedef struct PacketHeader
   {
@@ -66,6 +68,16 @@ namespace o3m151_driver
       uint32_t EndDelimiter;
 
   } ChannelEnd;
+
+  Input::Input() :
+      channel_buf_size_(0),
+      previous_packet_counter_(0),
+      previous_packet_counter_valid_(false),
+      startOfChannelFound_(false),
+      pos_in_channel_(0)
+  {
+      channelBuf = NULL;
+  }
 
   ////////////////////////////////////////////////////////////////////////
   // InputSocket class implementation
@@ -220,8 +232,6 @@ namespace o3m151_driver
 
   int InputSocket::getPacket(pcl::PointCloud<pcl::PointXYZI> &pc)
   {
-    // The data is in the channel 8
-    const uint32_t customerDataChannel = 8;
 
     // buffer for a single UDP packet
     const uint32_t udpPacketBufLen = 2000;
@@ -230,20 +240,6 @@ namespace o3m151_driver
     // As the alignment was forced to 1 we can work with the struct on the buffer.
     // This assumes the byte order is little endian which it is on a PC.
     PacketHeader* ph = (PacketHeader*)udpPacketBuf;
-
-    // the size of the channel may change so the size will be taken from the packet
-    uint32_t channel_buf_size = 0;
-    int8_t* channelBuf = NULL;
-
-    // As there is no offset in the packet header we have to remember where the next part should go
-    uint32_t pos_in_channel = 0;
-
-    // remember the counter of the previous packet so we know when we loose packets
-    uint32_t previous_packet_counter = 0;
-    bool previous_packet_counter_valid = false;
-
-    // the receiption of the data may start at any time. So we wait til we find the beginning of our channel
-    bool startOfChannelFound = false;
 
     struct pollfd fds[1];
     fds[0].fd = sockfd_;
@@ -301,21 +297,21 @@ namespace o3m151_driver
       else
       {
         // Check the packet counter for missing packets
-        if (previous_packet_counter_valid)
+        if (previous_packet_counter_valid_)
         {
           // if the type of the variables is ui32, it will also work when the wrap around happens.
-          if ((ph->PacketCounter - previous_packet_counter) != 1)
+          if ((ph->PacketCounter - previous_packet_counter_) != 1)
           {
-            ROS_DEBUG("Packet Counter jumped from %ul to %ul", previous_packet_counter, ph->PacketCounter);
+            ROS_DEBUG("Packet Counter jumped from %ul to %ul", previous_packet_counter_, ph->PacketCounter);
 
             // With this it will ignore the already received parts and resynchronize at
             // the beginning of the next cycle.
-            startOfChannelFound = false;
+            startOfChannelFound_ = false;
           }
         }
 
-        previous_packet_counter = ph->PacketCounter;
-        previous_packet_counter_valid = true;
+        previous_packet_counter_ = ph->PacketCounter;
+        previous_packet_counter_valid_ = true;
 
         // is this the channel with our data?
         if (ph->ChannelID == customerDataChannel)
@@ -323,30 +319,30 @@ namespace o3m151_driver
           // are we at the beginning of the channel?
           if (ph->IndexOfPacketInChannel == 0)
           {
-            startOfChannelFound = true;
+            startOfChannelFound_ = true;
 
             // If we haven't allocated memory for channel do it now.
-            if (channel_buf_size == 0)
+            if (channel_buf_size_ == 0)
             {
-                channel_buf_size = ph->TotalLengthOfChannel;
-                channelBuf = new int8_t[channel_buf_size];
+                channel_buf_size_ = ph->TotalLengthOfChannel;
+                channelBuf = new int8_t[channel_buf_size_];
             }
 
             // as we reuse the buffer we clear it at the beginning of a transmission
-            memset(channelBuf, 0, channel_buf_size);
-            pos_in_channel = 0;
+            memset(channelBuf, 0, channel_buf_size_);
+            pos_in_channel_ = 0;
           }
 
           // if we have found the start of the channel at least once, we are ready to process the packet
-          if (startOfChannelFound)
+          if (startOfChannelFound_)
           {
-            processPacket(udpPacketBuf, rc, channelBuf, channel_buf_size, &pos_in_channel);
+            processPacket(udpPacketBuf, rc, channelBuf, channel_buf_size_, &pos_in_channel_);
 
             // Have we found the last packet in this channel? Then we are able to process it
             // The index is zero based so a channel with n parts will have indices from 0 to n-1
             if (ph->IndexOfPacketInChannel == ph->NumberOfPacketsInChannel -1)
             {
-                processChannel8(channelBuf, pos_in_channel, pc);
+                processChannel8(channelBuf, pos_in_channel_, pc);
                 return RESULT_OK;
             }
           }

@@ -46,7 +46,7 @@ namespace o3m151_driver
   class Input
   {
   public:
-    Input() {}
+    Input();
 
     /** @brief Read one O3M151 packet.
      *
@@ -57,6 +57,20 @@ namespace o3m151_driver
      *          > 0 if incomplete packet (is this possible?)
      */
     virtual int getPacket(pcl::PointCloud<pcl::PointXYZI> &pc) = 0;
+
+  protected:
+    // the size of the channel may change so the size will be taken from the packet
+    uint32_t channel_buf_size_;
+    int8_t* channelBuf;
+
+    // As there is no offset in the packet header we have to remember where the next part should go
+    uint32_t pos_in_channel_;
+
+    // remember the counter of the previous packet so we know when we loose packets
+    uint32_t previous_packet_counter_;
+    bool previous_packet_counter_valid_;
+    // the receiption of the data may start at any time. So we wait til we find the beginning of our channel
+    bool startOfChannelFound_;
   };
 
   /** @brief Live O3M151 input from socket. */
