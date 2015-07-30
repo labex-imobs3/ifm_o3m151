@@ -28,8 +28,8 @@
  *                      from a PCAP dump file
  */
 
-#ifndef __VELODYNE_INPUT_H
-#define __VELODYNE_INPUT_H
+#ifndef __O3M151_INPUT_H
+#define __O3M151_INPUT_H
 
 #include <unistd.h>
 #include <stdio.h>
@@ -131,4 +131,4 @@ namespace o3m151_driver
 
 } // o3m151_driver namespace
 
-#endif // __VELODYNE_INPUT_H
+#endif // __O3M151_INPUT_H

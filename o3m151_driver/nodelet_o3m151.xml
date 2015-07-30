@@ -1,9 +1,9 @@
 <library path="lib/libdriver_nodelet">
-  <class name="velodyne_driver/DriverNodelet"
-         type="velodyne_driver::DriverNodelet"
+  <class name="o3m151_driver/DriverNodelet"
+         type="o3m151_driver::DriverNodelet"
          base_class_type="nodelet::Nodelet">
     <description> 
-      Publish raw Velodyne data packets.
+      Publish o3m151 point cloud.
     </description>
   </class>
 </library>

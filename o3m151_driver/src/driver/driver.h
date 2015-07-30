@@ -12,8 +12,8 @@
  *  ROS driver interface for the O3M151 3D LIDARs
  */
 
-#ifndef _VELODYNE_DRIVER_H_
-#define _VELODYNE_DRIVER_H_ 1
+#ifndef _O3M151_DRIVER_H_
+#define _O3M151_DRIVER_H_ 1
 
 #include <string>
 #include <ros/ros.h>
@@ -55,4 +55,4 @@ private:
 
 } // namespace o3m151_driver
 
-#endif // _VELODYNE_DRIVER_H_
+#endif // _O3M151_DRIVER_H_
