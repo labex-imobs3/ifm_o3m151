@@ -78,7 +78,64 @@ namespace o3m151_driver
   {
       channelBuf = NULL;
   }
+  int Input::process(int8_t* udpPacketBuf, const ssize_t rc, pcl::PointCloud<pcl::PointXYZI> & pc)
+  {
+    // As the alignment was forced to 1 we can work with the struct on the buffer.
+    // This assumes the byte order is little endian which it is on a PC.
+    PacketHeader* ph = (PacketHeader*)udpPacketBuf;
 
+    // Check the packet counter for missing packets
+    if (previous_packet_counter_valid_)
+    {
+      // if the type of the variables is ui32, it will also work when the wrap around happens.
+      if ((ph->PacketCounter - previous_packet_counter_) != 1)
+      {
+        ROS_ERROR("Packet Counter jumped from %ul to %ul", previous_packet_counter_, ph->PacketCounter);
+
+        // With this it will ignore the already received parts and resynchronize at
+        // the beginning of the next cycle.
+        startOfChannelFound_ = false;
+      }
+    }
+
+    previous_packet_counter_ = ph->PacketCounter;
+    previous_packet_counter_valid_ = true;
+
+    // is this the channel with our data?
+    if (ph->ChannelID == customerDataChannel)
+    {
+      // are we at the beginning of the channel?
+      if (ph->IndexOfPacketInChannel == 0)
+      {
+        startOfChannelFound_ = true;
+
+        // If we haven't allocated memory for channel do it now.
+        if (channel_buf_size_ == 0)
+        {
+            channel_buf_size_ = ph->TotalLengthOfChannel;
+            channelBuf = new int8_t[channel_buf_size_];
+        }
+
+        // as we reuse the buffer we clear it at the beginning of a transmission
+        memset(channelBuf, 0, channel_buf_size_);
+        pos_in_channel_ = 0;
+      }
+
+      // if we have found the start of the channel at least once, we are ready to process the packet
+      if (startOfChannelFound_)
+      {
+        processPacket(udpPacketBuf, rc, channelBuf, channel_buf_size_, &pos_in_channel_);
+
+        // Have we found the last packet in this channel? Then we are able to process it
+        // The index is zero based so a channel with n parts will have indices from 0 to n-1
+        if (ph->IndexOfPacketInChannel == ph->NumberOfPacketsInChannel -1)
+        {
+            processChannel8(channelBuf, pos_in_channel_, pc);
+            return RESULT_OK;
+        }
+      }
+    }
+  }
   ////////////////////////////////////////////////////////////////////////
   // InputSocket class implementation
   ////////////////////////////////////////////////////////////////////////
@@ -130,7 +187,7 @@ namespace o3m151_driver
   }
 
   // Extracts the data in the payload of the udp packet und puts it into the channel buffer
-  int InputSocket::processPacket( int8_t* currentPacketData,  // payload of the udp packet (without ethernet/IP/UDP header)
+  int Input::processPacket( int8_t* currentPacketData,  // payload of the udp packet (without ethernet/IP/UDP header)
                       uint32_t currentPacketSize, // size of the udp packet payload
                       int8_t* channelBuffer,      // buffer for a complete channel
                       uint32_t channelBufferSize, // size of the buffer for the complete channel
@@ -174,7 +231,7 @@ namespace o3m151_driver
 
 
   // Gets the data from the channel and prints them
-  void InputSocket::processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZI> & pc)
+  void Input::processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZI> & pc)
   {
     // you may find the offset of the data in the documentation
     const uint32_t distanceX_offset = 2052;
@@ -237,10 +294,6 @@ namespace o3m151_driver
     const uint32_t udpPacketBufLen = 2000;
     int8_t udpPacketBuf[udpPacketBufLen];
 
-    // As the alignment was forced to 1 we can work with the struct on the buffer.
-    // This assumes the byte order is little endian which it is on a PC.
-    PacketHeader* ph = (PacketHeader*)udpPacketBuf;
-
     struct pollfd fds[1];
     fds[0].fd = sockfd_;
     fds[0].events = POLLIN;
@@ -296,57 +349,10 @@ namespace o3m151_driver
         return RESULT_ERROR;
       else
       {
-        // Check the packet counter for missing packets
-        if (previous_packet_counter_valid_)
-        {
-          // if the type of the variables is ui32, it will also work when the wrap around happens.
-          if ((ph->PacketCounter - previous_packet_counter_) != 1)
-          {
-            ROS_DEBUG("Packet Counter jumped from %ul to %ul", previous_packet_counter_, ph->PacketCounter);
-
-            // With this it will ignore the already received parts and resynchronize at
-            // the beginning of the next cycle.
-            startOfChannelFound_ = false;
-          }
-        }
-
-        previous_packet_counter_ = ph->PacketCounter;
-        previous_packet_counter_valid_ = true;
-
-        // is this the channel with our data?
-        if (ph->ChannelID == customerDataChannel)
-        {
-          // are we at the beginning of the channel?
-          if (ph->IndexOfPacketInChannel == 0)
-          {
-            startOfChannelFound_ = true;
-
-            // If we haven't allocated memory for channel do it now.
-            if (channel_buf_size_ == 0)
-            {
-                channel_buf_size_ = ph->TotalLengthOfChannel;
-                channelBuf = new int8_t[channel_buf_size_];
-            }
-
-            // as we reuse the buffer we clear it at the beginning of a transmission
-            memset(channelBuf, 0, channel_buf_size_);
-            pos_in_channel_ = 0;
-          }
-
-          // if we have found the start of the channel at least once, we are ready to process the packet
-          if (startOfChannelFound_)
-          {
-            processPacket(udpPacketBuf, rc, channelBuf, channel_buf_size_, &pos_in_channel_);
-
-            // Have we found the last packet in this channel? Then we are able to process it
-            // The index is zero based so a channel with n parts will have indices from 0 to n-1
-            if (ph->IndexOfPacketInChannel == ph->NumberOfPacketsInChannel -1)
-            {
-                processChannel8(channelBuf, pos_in_channel_, pc);
-                return RESULT_OK;
-            }
-          }
-        }
+        int result = process(udpPacketBuf, rc, pc);
+        ROS_INFO("result process %d", result);
+        if(result == RESULT_OK)
+          return result;
       }
     }
   }
@@ -413,6 +419,9 @@ namespace o3m151_driver
   {
     struct pcap_pkthdr *header;
     const u_char *pkt_data;
+    // buffer for a single UDP packet
+//    const uint32_t udpPacketBufLen = 2000;
+//    int8_t udpPacketBuf[udpPacketBufLen];
 
     while (true)
       {
@@ -422,7 +431,9 @@ namespace o3m151_driver
             // Keep the reader from blowing through the file.
             if (read_fast_ == false)
               packet_rate_.sleep();
-            
+
+//            int result = process(udpPacketBuf, rc, pc);
+//            ROS_INFO("result process %d", result);
 //            memcpy(&pkt->data[0], pkt_data+42, packet_size);
 //            pkt->stamp = ros::Time::now();
             empty_ = false;

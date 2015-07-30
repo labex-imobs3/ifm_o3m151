@@ -40,6 +40,7 @@
 
 namespace o3m151_driver
 {
+  class PacketHeader;
   static uint16_t UDP_PORT_NUMBER = 42000;
 
   /** @brief Pure virtual O3M151 input base class */
@@ -59,6 +60,15 @@ namespace o3m151_driver
     virtual int getPacket(pcl::PointCloud<pcl::PointXYZI> &pc) = 0;
 
   protected:
+    int processPacket( int8_t* currentPacketData,  // payload of the udp packet (without ethernet/IP/UDP header)
+                        uint32_t currentPacketSize, // size of the udp packet payload
+                        int8_t* channelBuffer,      // buffer for a complete channel
+                        uint32_t channelBufferSize, // size of the buffer for the complete channel
+                        uint32_t* pos);              // the current pos in the channel buffer
+
+    void processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZI> &pc);
+    int process(int8_t *udpPacketBuf, const ssize_t rc, pcl::PointCloud<pcl::PointXYZI> & pc);
+
     // the size of the channel may change so the size will be taken from the packet
     uint32_t channel_buf_size_;
     int8_t* channelBuf;
@@ -83,14 +93,6 @@ namespace o3m151_driver
     virtual int getPacket(pcl::PointCloud<pcl::PointXYZI> &pc);
 
   private:
-
-    int processPacket( int8_t* currentPacketData,  // payload of the udp packet (without ethernet/IP/UDP header)
-                        uint32_t currentPacketSize, // size of the udp packet payload
-                        int8_t* channelBuffer,      // buffer for a complete channel
-                        uint32_t channelBufferSize, // size of the buffer for the complete channel
-                        uint32_t* pos);              // the current pos in the channel buffer
-
-    void processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZI> &pc);
 
     int sockfd_;
   };
