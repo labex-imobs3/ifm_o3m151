@@ -25,9 +25,9 @@ int main(int argc, char** argv)
 
   // loop until shut down or end of file
   while(ros::ok() && dvr.poll())
-    {
-      ros::spinOnce();
-    }
+  {
+    ros::spinOnce();
+  }
 
   return 0;
 }

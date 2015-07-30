@@ -41,32 +41,29 @@ namespace o3m151_driver
 
   typedef struct PacketHeader
   {
-      uint16_t Version;
-      uint16_t Device;
-      uint32_t PacketCounter;
-      uint32_t CycleCounter;
-      uint16_t NumberOfPacketsInCycle;
-      uint16_t IndexOfPacketInCycle;
-      uint16_t NumberOfPacketsInChannel;
-      uint16_t IndexOfPacketInChannel;
-      uint32_t ChannelID;
-      uint32_t TotalLengthOfChannel;
-      uint32_t LengthPayload;
-
+    uint16_t Version;
+    uint16_t Device;
+    uint32_t PacketCounter;
+    uint32_t CycleCounter;
+    uint16_t NumberOfPacketsInCycle;
+    uint16_t IndexOfPacketInCycle;
+    uint16_t NumberOfPacketsInChannel;
+    uint16_t IndexOfPacketInChannel;
+    uint32_t ChannelID;
+    uint32_t TotalLengthOfChannel;
+    uint32_t LengthPayload;
   } PacketHeader;
 
 
   typedef struct ChannelHeader
   {
-      uint32_t StartDelimiter;
-      uint8_t reserved[24];
-
+    uint32_t StartDelimiter;
+    uint8_t reserved[24];
   } ChannelHeader;
 
   typedef struct ChannelEnd
   {
-      uint32_t EndDelimiter;
-
+    uint32_t EndDelimiter;
   } ChannelEnd;
 
   Input::Input() :
@@ -77,6 +74,105 @@ namespace o3m151_driver
       pos_in_channel_(0)
   {
       channelBuf = NULL;
+  }
+
+  // Extracts the data in the payload of the udp packet und puts it into the channel buffer
+  int Input::processPacket( int8_t* currentPacketData,  // payload of the udp packet (without ethernet/IP/UDP header)
+                      uint32_t currentPacketSize, // size of the udp packet payload
+                      int8_t* channelBuffer,      // buffer for a complete channel
+                      uint32_t channelBufferSize, // size of the buffer for the complete channel
+                      uint32_t* pos)              // the current pos in the channel buffer
+  {
+
+    // There is always a PacketHeader structure at the beginning
+    PacketHeader* ph = (PacketHeader*)currentPacketData;
+    int Start = sizeof(PacketHeader);
+    int Length = currentPacketSize - sizeof(PacketHeader);
+
+    // Only the first packet of a channel contains a ChannelHeader
+    if (ph->IndexOfPacketInChannel == 0)
+    {
+      Start += sizeof(ChannelHeader);
+    }
+
+      // Only the last packet of a channel contains an EndDelimiter (at the end, after the data)
+    if (ph->IndexOfPacketInChannel == ph->NumberOfPacketsInChannel - 1)
+    {
+      Length -= sizeof(ChannelEnd);
+    }
+
+    // Is the buffer big enough?
+    if ((*pos) + Length > channelBufferSize)
+    {
+        // Too small means either an error in the program logic or a corrupt packet
+        ROS_DEBUG("Channel buffer is too small.\n");
+        return RESULT_ERROR;
+    }
+    else
+    {
+      memcpy(channelBuffer+(*pos), currentPacketData+Start, Length);
+    }
+
+    (*pos) += Length;
+
+    return RESULT_OK;
+  }
+
+  // Gets the data from the channel and prints them
+  void Input::processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZI> & pc)
+  {
+    // you may find the offset of the data in the documentation
+    const uint32_t distanceX_offset = 2052;
+    const uint32_t distanceY_offset = 6148;
+    const uint32_t distanceZ_offset = 10244;
+    const uint32_t confidence_offset = 14340;
+    const uint32_t amplitude_offset = 16388;
+
+    // As we are working on raw buffers we have to check if the buffer is as big as we think
+    if (size < 18488)
+    {
+      ROS_DEBUG("processChannel8: buf too small\n");
+      return;
+    }
+
+
+    // These are arrays with 16*64=1024 elements
+    float* distanceX = (float*)(&buf[distanceX_offset]);
+    float* distanceY = (float*)(&buf[distanceY_offset]);
+    float* distanceZ = (float*)(&buf[distanceZ_offset]);
+    uint16_t* confidence = (uint16_t*)(&buf[confidence_offset]);
+    uint16_t* amplitude = (uint16_t*)(&buf[amplitude_offset]);
+
+
+    // line 8 column 32 is in the middle of the sensor
+    //uint32_t i = 64*7 + 32;
+
+    for( uint32_t i =0; i<1024; ++i)
+    {
+      // The lowest bit of the confidence contains the information if the pixel is valid
+      uint32_t pixelValid = confidence[i] & 1;
+
+      // 0=valid, 1=invalid
+      if (pixelValid == 0)
+      {
+          // \r is carriage return without newline. This way the output is always written in the same line
+//        ROS_DEBUG("X: %5.2f Y: %5.2f Z:%5.2f Amplitude:%5d                                               \r",
+//            distanceX[i],
+//            distanceY[i],
+//            distanceZ[i],
+//            amplitude[i]);
+        pcl::PointXYZI point;
+        point.x = distanceX[i];
+        point.y = distanceY[i];
+        point.z = distanceZ[i];
+        point.intensity = amplitude[i];
+        pc.points.push_back(point);
+      }
+      else
+      {
+        ROS_DEBUG("Pixel is invalid");
+      }
+    }
   }
 
   int Input::process(int8_t* udpPacketBuf, const ssize_t rc, pcl::PointCloud<pcl::PointXYZI> & pc)
@@ -185,106 +281,6 @@ namespace o3m151_driver
   InputSocket::~InputSocket(void)
   {
     (void) close(sockfd_);
-  }
-
-  // Extracts the data in the payload of the udp packet und puts it into the channel buffer
-  int Input::processPacket( int8_t* currentPacketData,  // payload of the udp packet (without ethernet/IP/UDP header)
-                      uint32_t currentPacketSize, // size of the udp packet payload
-                      int8_t* channelBuffer,      // buffer for a complete channel
-                      uint32_t channelBufferSize, // size of the buffer for the complete channel
-                      uint32_t* pos)              // the current pos in the channel buffer
-  {
-
-    // There is always a PacketHeader structure at the beginning
-    PacketHeader* ph = (PacketHeader*)currentPacketData;
-    int Start = sizeof(PacketHeader);
-    int Length = currentPacketSize - sizeof(PacketHeader);
-
-    // Only the first packet of a channel contains a ChannelHeader
-    if (ph->IndexOfPacketInChannel == 0)
-    {
-      Start += sizeof(ChannelHeader);
-    }
-
-      // Only the last packet of a channel contains an EndDelimiter (at the end, after the data)
-    if (ph->IndexOfPacketInChannel == ph->NumberOfPacketsInChannel - 1)
-    {
-      Length -= sizeof(ChannelEnd);
-    }
-
-    // Is the buffer big enough?
-    if ((*pos) + Length > channelBufferSize)
-    {
-        // Too small means either an error in the program logic or a corrupt packet
-        ROS_DEBUG("Channel buffer is too small.\n");
-        return RESULT_ERROR;
-    }
-    else
-    {
-      memcpy(channelBuffer+(*pos), currentPacketData+Start, Length);
-    }
-
-    (*pos) += Length;
-
-    return RESULT_OK;
-  }
-
-
-  // Gets the data from the channel and prints them
-  void Input::processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZI> & pc)
-  {
-    // you may find the offset of the data in the documentation
-    const uint32_t distanceX_offset = 2052;
-    const uint32_t distanceY_offset = 6148;
-    const uint32_t distanceZ_offset = 10244;
-    const uint32_t confidence_offset = 14340;
-    const uint32_t amplitude_offset = 16388;
-
-    // As we are working on raw buffers we have to check if the buffer is as big as we think
-    if (size < 18488)
-    {
-      ROS_DEBUG("processChannel8: buf too small\n");
-      return;
-    }
-
-
-    // These are arrays with 16*64=1024 elements
-    float* distanceX = (float*)(&buf[distanceX_offset]);
-    float* distanceY = (float*)(&buf[distanceY_offset]);
-    float* distanceZ = (float*)(&buf[distanceZ_offset]);
-    uint16_t* confidence = (uint16_t*)(&buf[confidence_offset]);
-    uint16_t* amplitude = (uint16_t*)(&buf[amplitude_offset]);
-
-
-    // line 8 column 32 is in the middle of the sensor
-    //uint32_t i = 64*7 + 32;
-
-    for( uint32_t i =0; i<1024; ++i)
-    {
-      // The lowest bit of the confidence contains the information if the pixel is valid
-      uint32_t pixelValid = confidence[i] & 1;
-
-      // 0=valid, 1=invalid
-      if (pixelValid == 0)
-      {
-          // \r is carriage return without newline. This way the output is always written in the same line
-//        ROS_DEBUG("X: %5.2f Y: %5.2f Z:%5.2f Amplitude:%5d                                               \r",
-//            distanceX[i],
-//            distanceY[i],
-//            distanceZ[i],
-//            amplitude[i]);
-        pcl::PointXYZI point;
-        point.x = distanceX[i];
-        point.y = distanceY[i];
-        point.z = distanceZ[i];
-        point.intensity = amplitude[i];
-        pc.points.push_back(point);
-      }
-      else
-      {
-        ROS_DEBUG("Pixel is invalid");
-      }
-    }
   }
 
   int InputSocket::getPacket(pcl::PointCloud<pcl::PointXYZI> &pc)

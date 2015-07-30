@@ -34,12 +34,12 @@ public:
   ~DriverNodelet()
   {
     if (running_)
-      {
-        NODELET_INFO("shutting down driver thread");
-        running_ = false;
-        deviceThread_->join();
-        NODELET_INFO("driver thread stopped");
-      }
+    {
+      NODELET_INFO("shutting down driver thread");
+      running_ = false;
+      deviceThread_->join();
+      NODELET_INFO("driver thread stopped");
+    }
   }
 
 private:
@@ -68,12 +68,12 @@ void DriverNodelet::onInit()
 void DriverNodelet::devicePoll()
 {
   while(ros::ok())
-    {
-      // poll device until end of file
-      running_ = dvr_->poll();
-      if (!running_)
-        break;
-    }
+  {
+    // poll device until end of file
+    running_ = dvr_->poll();
+    if (!running_)
+      break;
+  }
   running_ = false;
 }
 
