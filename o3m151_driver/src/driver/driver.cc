@@ -53,7 +53,7 @@ O3M151Driver::O3M151Driver(ros::NodeHandle node,
   // open O3M151 input device or file
   if (dump_file != "")
     input_.reset(new o3m151_driver::InputPCAP(private_nh,
-                                                  diag_freq,
+                                                  diag_freq*19,   // Needs 19 packets to obtain a scan (cf wireshark)
                                                   dump_file));
   else
     input_.reset(new o3m151_driver::InputSocket(private_nh));

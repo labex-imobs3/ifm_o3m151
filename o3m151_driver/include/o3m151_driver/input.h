@@ -100,7 +100,7 @@ namespace o3m151_driver
 
   /** @brief O3M151 input from PCAP dump file.
    *
-   * Dump files can be grabbed by libpcap, O3M151's DSR software,
+   * Dump files can be grabbed by libpcap,
    * ethereal, wireshark, tcpdump, or the \ref vdump_command.
    */
   class InputPCAP: public Input

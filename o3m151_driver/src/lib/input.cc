@@ -78,6 +78,7 @@ namespace o3m151_driver
   {
       channelBuf = NULL;
   }
+
   int Input::process(int8_t* udpPacketBuf, const ssize_t rc, pcl::PointCloud<pcl::PointXYZI> & pc)
   {
     // As the alignment was forced to 1 we can work with the struct on the buffer.
@@ -194,13 +195,13 @@ namespace o3m151_driver
                       uint32_t* pos)              // the current pos in the channel buffer
   {
 
-      // There is always a PacketHeader structure at the beginning
+    // There is always a PacketHeader structure at the beginning
     PacketHeader* ph = (PacketHeader*)currentPacketData;
     int Start = sizeof(PacketHeader);
     int Length = currentPacketSize - sizeof(PacketHeader);
 
-      // Only the first packet of a channel contains a ChannelHeader
-      if (ph->IndexOfPacketInChannel == 0)
+    // Only the first packet of a channel contains a ChannelHeader
+    if (ph->IndexOfPacketInChannel == 0)
     {
       Start += sizeof(ChannelHeader);
     }
@@ -211,22 +212,21 @@ namespace o3m151_driver
       Length -= sizeof(ChannelEnd);
     }
 
-      // Is the buffer big enough?
-      if ((*pos) + Length > channelBufferSize)
-      {
-          // Too small means either an error in the program logic or a corrupt packet
-          ROS_DEBUG("Channel buffer is too small.\n");
-          return RESULT_ERROR;
-      }
-      else
-      {
-        memcpy(channelBuffer+(*pos), currentPacketData+Start, Length);
-      }
+    // Is the buffer big enough?
+    if ((*pos) + Length > channelBufferSize)
+    {
+        // Too small means either an error in the program logic or a corrupt packet
+        ROS_DEBUG("Channel buffer is too small.\n");
+        return RESULT_ERROR;
+    }
+    else
+    {
+      memcpy(channelBuffer+(*pos), currentPacketData+Start, Length);
+    }
 
     (*pos) += Length;
 
-      return RESULT_OK;
-
+    return RESULT_OK;
   }
 
 
@@ -400,10 +400,10 @@ namespace o3m151_driver
     // Open the PCAP dump file
     ROS_INFO("Opening PCAP file \"%s\"", filename_.c_str());
     if ((pcap_ = pcap_open_offline(filename_.c_str(), errbuf_) ) == NULL)
-      {
-        ROS_FATAL("Error opening O3M151 socket dump file.");
-        return;
-      }
+    {
+      ROS_FATAL("Error opening O3M151 socket dump file.");
+      return;
+    }
   }
 
 
@@ -420,55 +420,61 @@ namespace o3m151_driver
     struct pcap_pkthdr *header;
     const u_char *pkt_data;
     // buffer for a single UDP packet
-//    const uint32_t udpPacketBufLen = 2000;
-//    int8_t udpPacketBuf[udpPacketBufLen];
+    const uint32_t udpPacketBufLen = 2000;
+    int8_t udpPacketBuf[udpPacketBufLen];
 
     while (true)
+    {
+      bool keep_reading = false;
+      int res;
+      if ((res = pcap_next_ex(pcap_, &header, &pkt_data)) >= 0)
       {
-        int res;
-        if ((res = pcap_next_ex(pcap_, &header, &pkt_data)) >= 0)
-          {
-            // Keep the reader from blowing through the file.
-            if (read_fast_ == false)
-              packet_rate_.sleep();
+        // Keep the reader from blowing through the file.
+        if (read_fast_ == false)
+          packet_rate_.sleep();
 
-//            int result = process(udpPacketBuf, rc, pc);
-//            ROS_INFO("result process %d", result);
-//            memcpy(&pkt->data[0], pkt_data+42, packet_size);
-//            pkt->stamp = ros::Time::now();
-            empty_ = false;
-            return 0;                   // success
-          }
+        memcpy(udpPacketBuf, pkt_data+42, header->len);
+        int result = RESULT_ERROR;
+        result = process(udpPacketBuf, header->len-42, pc);
+        ROS_DEBUG("result process %d", header->len);
+        empty_ = false;
+        if(result == RESULT_OK)
+          return RESULT_OK;                   // success
+        else
+          keep_reading = true;
+      }
 
-        if (empty_)                 // no data in file?
-          {
-            ROS_WARN("Error %d reading O3M151 packet: %s",
-                     res, pcap_geterr(pcap_));
-            return -1;
-          }
+      if (empty_)                 // no data in file?
+      {
+        ROS_WARN("Error %d reading O3M151 packet: %s",
+                 res, pcap_geterr(pcap_));
+        return -1;
+      }
 
-        if (read_once_)
-          {
-            ROS_INFO("end of file reached -- done reading.");
-            return -1;
-          }
-        
-        if (repeat_delay_ > 0.0)
-          {
-            ROS_INFO("end of file reached -- delaying %.3f seconds.",
-                     repeat_delay_);
-            usleep(rint(repeat_delay_ * 1000000.0));
-          }
+      if (read_once_)
+      {
+        ROS_INFO("end of file reached -- done reading.");
+        return -1;
+      }
 
+      if (repeat_delay_ > 0.0)
+      {
+        ROS_INFO("end of file reached -- delaying %.3f seconds.",
+                 repeat_delay_);
+        usleep(rint(repeat_delay_ * 1000000.0));
+      }
+
+      if(keep_reading == false)
+      {
         ROS_DEBUG("replaying O3M151 dump file");
-
         // I can't figure out how to rewind the file, because it
         // starts with some kind of header.  So, close the file
         // and reopen it with pcap.
         pcap_close(pcap_);
         pcap_ = pcap_open_offline(filename_.c_str(), errbuf_);
         empty_ = true;              // maybe the file disappeared?
-      } // loop back and try again
+      }
+    } // loop back and try again
   }
 
 } // o3m151 namespace
