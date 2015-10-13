@@ -153,7 +153,7 @@ namespace o3m151_driver
       uint32_t pixelValid = confidence[i] & 1;
 
       // 0=valid, 1=invalid
-      if (pixelValid == 0)
+      if (pixelValid == 0 && distanceX[i] > 0.2)
       {
           // \r is carriage return without newline. This way the output is always written in the same line
 //        ROS_DEBUG("X: %5.2f Y: %5.2f Z:%5.2f Amplitude:%5d                                               \r",
@@ -163,8 +163,8 @@ namespace o3m151_driver
 //            amplitude[i]);
         pcl::PointXYZI point;
         point.x = distanceX[i];
-        point.y = distanceY[i];
-        point.z = distanceZ[i];
+        point.y = -distanceY[i];
+        point.z = -distanceZ[i] +1;
         point.intensity = amplitude[i];
         pc.points.push_back(point);
       }
