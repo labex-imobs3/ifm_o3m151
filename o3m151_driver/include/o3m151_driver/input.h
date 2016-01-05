@@ -66,6 +66,7 @@ namespace o3m151_driver
                         uint32_t channelBufferSize, // size of the buffer for the complete channel
                         uint32_t* pos);              // the current pos in the channel buffer
 
+    double slope(const std::vector<double>& x, const std::vector<double>& y);
     void processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZI> &pc);
     int process(int8_t *udpPacketBuf, const ssize_t rc, pcl::PointCloud<pcl::PointXYZI> & pc);
 

@@ -30,6 +30,11 @@
 #include <sys/file.h>
 #include <o3m151_driver/input.h>
 
+#include <algorithm>
+#include <iostream>
+#include <numeric>
+#include <vector>
+
 #define RESULT_OK (0)
 #define RESULT_ERROR (-1)
 
@@ -118,6 +123,17 @@ namespace o3m151_driver
     return RESULT_OK;
   }
 
+
+  double Input::slope(const std::vector<double>& x, const std::vector<double>& y) {
+      const double n    = x.size();
+      const double s_x  = std::accumulate(x.begin(), x.end(), 0.0);
+      const double s_y  = std::accumulate(y.begin(), y.end(), 0.0);
+      const double s_xx = std::inner_product(x.begin(), x.end(), x.begin(), 0.0);
+      const double s_xy = std::inner_product(x.begin(), x.end(), y.begin(), 0.0);
+      const double a    = (n * s_xy - s_x * s_y) / (n * s_xx - s_x * s_x);
+      return a;
+  }
+
   // Gets the data from the channel and prints them
   void Input::processChannel8(int8_t* buf, uint32_t size, pcl::PointCloud<pcl::PointXYZI> & pc)
   {
@@ -127,6 +143,8 @@ namespace o3m151_driver
     const uint32_t distanceZ_offset = 10244;
     const uint32_t confidence_offset = 14340;
     const uint32_t amplitude_offset = 16388;
+    const uint32_t amplitude_normalization_offset = 18436;
+    const uint32_t camera_calibration_offset = 18464;
 
     // As we are working on raw buffers we have to check if the buffer is as big as we think
     if (size < 18488)
@@ -135,44 +153,85 @@ namespace o3m151_driver
       return;
     }
 
-
     // These are arrays with 16*64=1024 elements
     float* distanceX = (float*)(&buf[distanceX_offset]);
     float* distanceY = (float*)(&buf[distanceY_offset]);
     float* distanceZ = (float*)(&buf[distanceZ_offset]);
     uint16_t* confidence = (uint16_t*)(&buf[confidence_offset]);
     uint16_t* amplitude = (uint16_t*)(&buf[amplitude_offset]);
-
+    float* amplitude_normalization = (float*)(&buf[amplitude_normalization_offset]);
+    float* camera_calibration = (float*)(&buf[camera_calibration_offset]);
 
     // line 8 column 32 is in the middle of the sensor
     //uint32_t i = 64*7 + 32;
 
-    for( uint32_t i =0; i<1024; ++i)
+    std::vector<double> vx, vz;
+    for( uint32_t m =0; m<16; ++m)
     {
-      // The lowest bit of the confidence contains the information if the pixel is valid
-      uint32_t pixelValid = confidence[i] & 1;
+      for( uint32_t j =0; j<64; ++j)
+      {
+        uint32_t i = 64*m +j;
+        // The lowest bit of the confidence contains the information if the pixel is valid
+        uint32_t pixelValid = confidence[i] & 1;
 
-      // 0=valid, 1=invalid
-      if (pixelValid == 0 && distanceX[i] > 0.2)
-      {
-          // \r is carriage return without newline. This way the output is always written in the same line
-//        ROS_DEBUG("X: %5.2f Y: %5.2f Z:%5.2f Amplitude:%5d                                               \r",
-//            distanceX[i],
-//            distanceY[i],
-//            distanceZ[i],
-//            amplitude[i]);
-        pcl::PointXYZI point;
-        point.x = distanceX[i];
-        point.y = -distanceY[i];
-        point.z = -distanceZ[i] +1;
-        point.intensity = amplitude[i];
-        pc.points.push_back(point);
-      }
-      else
-      {
-        ROS_DEBUG("Pixel is invalid");
+        // 0=valid, 1=invalid
+        if (distanceX[i] > 0.2)// && j > 20 && j < 50 && m >0 && m <12)
+        {
+            // \r is carriage return without newline. This way the output is always written in the same line
+  //        ROS_DEBUG("X: %5.2f Y: %5.2f Z:%5.2f Amplitude:%5d                                               \r",
+  //            distanceX[i],
+  //            distanceY[i],
+  //            distanceZ[i],
+  //            amplitude[i]);
+          pcl::PointXYZI point;
+          point.x = distanceX[i] ;//- camera_calibration[0];
+          point.y = distanceY[i] ;//- camera_calibration[1];
+          point.z = distanceZ[i] - 1;// camera_calibration[2];
+//          bool exposure = (confidence[i] >> 1) & 1;
+//          bool gain = (confidence[i] >> 2) & 1;
+//          int norm_index;
+//          if(gain == false)
+//            if(exposure == false)
+//              norm_index = 0;
+//            else
+//              norm_index = 1;
+//          else
+//            if(exposure == false)
+//              norm_index = 2;
+//            else
+//              norm_index = 3;
+          float normalization_factor = 1;
+//          float normalization_factor = amplitude_normalization[norm_index];
+//          ROS_INFO_STREAM("gain "<<gain<<" exposure "<<exposure<<
+//                          " amplitude[i] "<<amplitude[i]<<" normalization_factor "<<normalization_factor);
+          point.intensity = amplitude[i]*normalization_factor;
+          pc.points.push_back(point);
+//          if(j == 40)
+//          {
+//            vx.push_back(point.x);
+//            vz.push_back(point.z);
+//          }
+        }
       }
     }
+    for(int n = 0; n <4; n++)
+      ROS_DEBUG_STREAM("amplitude_normalization "<<n<<" "<<amplitude_normalization[n]);
+//    static int k = 0;
+//    static int l = 0;
+//    l++;
+//    static double s=0, s_mean=0;
+//    s += slope(vz, vx);
+//    if(l%10 == 0)
+//    {
+//      k++;
+//      if(k > 63)
+//        k =0;
+
+//      s_mean = s/10;
+//      s=0;
+//    }
+//    ROS_INFO_STREAM("vx "<<vx.size()<<" vz "<<vz.size());
+//    ROS_INFO_STREAM("s "<<s_mean);
   }
 
   int Input::process(int8_t* udpPacketBuf, const ssize_t rc, pcl::PointCloud<pcl::PointXYZI> & pc)
@@ -346,7 +405,7 @@ namespace o3m151_driver
       else
       {
         int result = process(udpPacketBuf, rc, pc);
-        ROS_INFO("result process %d", result);
+        ROS_DEBUG("result process %d", result);
         if(result == RESULT_OK)
           return result;
       }
