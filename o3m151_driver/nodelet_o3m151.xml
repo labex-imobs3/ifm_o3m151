@@ -1,4 +1,4 @@
-<library path="lib/libdriver_nodelet">
+<library path="lib/libo3m151driver_nodelet">
   <class name="o3m151_driver/DriverNodelet"
          type="o3m151_driver::DriverNodelet"
          base_class_type="nodelet::Nodelet">

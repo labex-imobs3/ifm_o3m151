@@ -1,11 +1,5 @@
 # build the driver node
-#message(STATUS "PROJECT_NAME " "^${CMAKE_SOURCE_DIR}/include/${PROJECT_NAME}/")
-file(GLOB_RECURSE include_files "${CMAKE_SOURCE_DIR}/include/${PROJECT_NAME}/*")
-file(GLOB_RECURSE launch_files "${CMAKE_SOURCE_DIR}/launch/*")
-list(APPEND extra_files ${include_files} ${launch_files})
-#message(STATUS "extra_files " ${extra_files})
-
-add_executable(o3m151_node o3m151_node.cc driver.cc ${extra_files})
+add_executable(o3m151_node o3m151_node.cc driver.cc)
 target_link_libraries(o3m151_node
   o3m151_input
   ${catkin_LIBRARIES}
@@ -13,8 +7,8 @@ target_link_libraries(o3m151_node
 )
 
 # build the nodelet version
-add_library(driver_nodelet nodelet.cc driver.cc)
-target_link_libraries(driver_nodelet
+add_library(o3m151driver_nodelet nodelet.cc driver.cc)
+target_link_libraries(o3m151driver_nodelet
   o3m151_input
   ${catkin_LIBRARIES}
   ${libpcap_LIBRARIES}
@@ -25,6 +19,6 @@ install(TARGETS o3m151_node
         RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
         COMPONENT main
 )
-install(TARGETS driver_nodelet
+install(TARGETS o3m151driver_nodelet
         LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 )
