@@ -3,38 +3,37 @@
 
 \htmlinclude manifest.html
 
-ROS device driver for Velodyne 3D LIDARs. 
+ROS device driver for IFM o3m151.
 
-\section read Velodyne device driver
+\section read IFM o3m151 device driver
 
-ROS device driver node that captures Velodyne 3D LIDAR data and
-publishes it to the \b velodyne_msgs/VelodyneScan topic.
+ROS device driver node that captures IFM o3m151 data and
+publishes it to the \b sensor_msgs/PointCloud2 topic.
 
 \subsection read_examples Examples
 
-Read the Velodyne input socket as fast as possible.  Publish each
-complete revolution to \b velodyne/rawscan.
+Read the IFM camera input socket as fast as possible.  Publish each
+complete revolution to \b o3m151_points topic.
 
 \verbatim
-$ rosrun velodyne_driver velodyne_node
+$ rosrun o3m151_driver o3m151_node
 \endverbatim
 
-Read previously captured Velodyne packets from dump.pcap file.
-Publish messages to \b velodyne/rawscan at approximately 10 Hz rate.
+Read previously captured IFM packets from dump.pcap file.
+Publish messages to \b o3m151_points at the sensor rate.
 
-Dump files can be grabbed by libpcap, Velodyne's DSR software,
-ethereal, wireshark, tcpdump, or the velodyne_driver vdump command.
+Dump files can be grabbed by libpcap,
+ethereal, wireshark, tcpdump, or the o3m151_driver vdump command.
 
 \verbatim
-$ rosrun velodyne_driver velodyne_node _pcap:=dump.pcap
+$ rosrun o3m151_driver o3m151_node _pcap:=dump.pcap
 \endverbatim
 
 \subsection read_names ROS names
 
-Node name: \b velodyne_node
+Node name: \b o3m151_node
 
-Publishes: \b velodyne_packets raw Velodyne data packets for one
-entire revolution of the device.
+Publishes: \b o3m151_points publish a 3D point cloud of the IFM camera.
 
 Parameters:
 
@@ -48,17 +47,17 @@ Parameters:
 
 \section vdump_command Vdump Command
 
-The vdump command dumps raw data from the Velodyne LIDAR in PCAP
+The vdump command dumps raw data from the IFM camera in PCAP
 format.  It is a shell script wrapper with some obscure options for
 the powerful tcpdump command.
 
 Other methods of acquiring PCAP data include using tcpdump directly,
-wireshark, Velodyne's DSR software, and programming with libpcap.
+wireshark and programming with libpcap.
 
 \subsection vdump_usage Usage
 
 \verbatim
-  rosrun velodyne_driver vdump <file_prefix> [ <interface> ]
+  rosrun o3m151_driver vdump <file_prefix> [ <interface> ]
 
         <file_prefix>   file name to dump (with 3-digit number suffix)
         <interface>     interface to read from (default: "eth1")
@@ -66,12 +65,11 @@ wireshark, Velodyne's DSR software, and programming with libpcap.
 
 \subsection vdump_examples Examples
 
-Dump Velodyne packets to a series of files named "pcap-000",
-"pcap-001", etc.  Each file will be about 100MB, holding a little more
-than 30 seconds of Velodyne packets.  Type ^C when finished.
+Dump IFM packets to a series of files named "pcap-000",
+"pcap-001", etc. Type ^C when finished.
 
 \verbatim
-$ rosrun velodyne_driver vdump pcap- eth0
+$ rosrun o3m151_driver vdump pcap- eth0
 \endverbatim
 
 */

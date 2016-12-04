@@ -1,6 +1,4 @@
 /*
- *  Copyright (C) 2012 Austin Robot Technology, Jack O'Quin
- * 
  *  License: Modified BSD Software License Agreement
  *
  *  $Id$
