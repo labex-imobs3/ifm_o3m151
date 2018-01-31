@@ -1,44 +1,32 @@
-<package>
-
+<?xml version="1.0"?>
+<package format="2">
   <name>o3m151_driver</name>
   <version>1.2.0</version>
   <description>
     ROS device driver for Ifm O3M151 TOF camera.
   </description>
-  <maintainer email="vincentrou@gmail.com">Vincent Rousseau</maintainer>
-  <author> Vincent Rousseau</author>
+  <maintainer email="vincent.rousseau@irstea.fr">Vincent Rousseau</maintainer>
+  <author>Vincent Rousseau</author>
   <license>BSD</license>
 
-  <url type="website">http://www.ros.org/wiki/</url>
-  <url type="repository">https://github.com/</url>
-  <url type="bugtracker">https://github.com/issues</url>
+  <url type="website">http://www.ros.org/wiki/o3m151_driver</url>
+  <url type="repository">https://github.com/labex-imobs3/ifm_o3m151</url>
+  <url type="bugtracker">https://github.com/labex-imobs3/ifm_o3m151/issues</url>
 
   <buildtool_depend>catkin</buildtool_depend>
 
-  <build_depend>diagnostic_updater</build_depend>
-  <build_depend>libpcap</build_depend>
-  <build_depend>nodelet</build_depend>
-  <build_depend>pluginlib</build_depend>
-  <build_depend>roscpp</build_depend>
-  <build_depend>roslib</build_depend>
-  <build_depend>tf</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>pcl_conversions</build_depend>
-  <build_depend>pcl_ros</build_depend>
+  <depend>diagnostic_updater</depend>
+  <depend>libpcap</depend>
+  <depend>nodelet</depend>
+  <depend>pluginlib</depend>
+  <depend>roscpp</depend>
+  <depend>roslib</depend>
+  <depend>tf</depend>
+  <depend>sensor_msgs</depend>
+  <depend>pcl_conversions</depend>
+  <depend>pcl_ros</depend>
 
-  <!-- these build dependencies are only needed for unit testing -->
-  <build_depend>roslaunch</build_depend>
-  <build_depend>rostest</build_depend>
-
-  <run_depend>diagnostic_updater</run_depend>
-  <run_depend>libpcap</run_depend>
-  <run_depend>nodelet</run_depend>
-  <run_depend>pluginlib</run_depend>
-  <run_depend>roscpp</run_depend>
-  <run_depend>roslib</run_depend>
-  <run_depend>tf</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>pcl_ros</run_depend>
+  <test_depend>roslaunch</test_depend>
 
   <export>
     <nodelet plugin="${prefix}/nodelet_o3m151.xml"/>
