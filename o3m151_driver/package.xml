@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>o3m151_driver</name>
-  <version>1.2.0</version>
+  <version>1.2.1</version>
   <description>
     ROS device driver for Ifm O3M151 TOF camera.
   </description>

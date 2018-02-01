@@ -2,8 +2,8 @@
 Changelog for package o3m151_driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.2.1 (2018-02-01)
+------------------
 * Update package xml to format 2
 * Update doc and comment
 * Change library name to not conflict with velodyne nodelet library
